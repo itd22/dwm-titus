@@ -1,13 +1,14 @@
 # Fedora Titus DWM installation
 
-This document explains what to select in the Anaconda installer "Software Selection" and how to configure the Installation Source so the custom dwm-titus installer ISO installs a minimal, working dwm session. It covers common cases when using the provided dwm-titus ISO in VirtualBox.
+Details on Anaconda installer "Software Selection" HWOTO configure the Installation Source.
+custom dwm-titus installer ISO installs a minimal, working dwm session.
+It covers common cases when using the provided dwm-titus ISO in VirtualBox.
 
 Goal
 - Install a minimal Fedora system able to run dwm built from the dwm-titus repo.
 - Avoid unnecessary packages while keeping the X11 stack and build/runtime deps needed by dwm.
 
 Quick recommendation
-- For a truly offline installation: use a Fedora DVD/Everything ISO (contains `Packages/` and `repodata/`) as the base image or rebuild the dwm-titus ISO using a DVD/Everything ISO as `--input`. Attach that ISO as the VM optical drive and choose the installer entry; then select "Local Media" (the installer will detect the media).
 - If you only have the dwm-titus ISO built from a netinst image and do not want to use the internet during install: run a simple HTTP server on your host that serves a full Fedora DVD tree (or the host-mounted ISO) and point the VM/installer at that URL (NAT: `http://10.0.2.2:8000/`). See steps below.
 
 1) Verify the ISO type (netinst/live vs DVD/Everything)
@@ -24,8 +25,6 @@ Quick recommendation
 - Boot the VM and select the Fedora installer entry.
 
 3) Installation Source (what to choose in the installer)
-- If ISO contains `repodata/` (DVD/Everything):
-  - Installation Source → Local media (the installer should auto-detect the repo on the ISO). No network required.
 - If ISO is netinst/live (no `repodata/`) and you do not want the installer to talk to the public internet:
   - Option A — Serve a full DVD tree from the host and point installer to it:
     - On host (mount a full Fedora DVD or the ISO that contains `Packages/repodata`):
