@@ -25,6 +25,23 @@ typedef struct {
 static TomlCacheEntry toml_cache[TOML_CACHE_SIZE];
 static int toml_cache_next = 0;
 
+/* Debug / stats */
+static int toml_cache_debug = 0;
+static unsigned long toml_cache_hits = 0;
+static unsigned long toml_cache_misses = 0;
+static unsigned long toml_cache_puts = 0;
+
+void toml_cache_enable_debug(int enable)
+{
+	toml_cache_debug = enable ? 1 : 0;
+}
+
+void toml_cache_stats(void)
+{
+	fprintf(stderr, "toml cache: hits=%lu misses=%lu puts=%lu size=%d\n",
+		 toml_cache_hits, toml_cache_misses, toml_cache_puts, TOML_CACHE_SIZE);
+}
+
 static void cache_put(const char *path, const struct stat *st, const TomlDoc *doc)
 {
 	int i = toml_cache_next % TOML_CACHE_SIZE;
@@ -35,6 +52,8 @@ static void cache_put(const char *path, const struct stat *st, const TomlDoc *do
 	toml_cache[i].size  = st->st_size;
 	toml_cache[i].doc = *doc; /* struct copy */
 	toml_cache[i].valid = 1;
+	toml_cache_puts++;
+	if (toml_cache_debug) fprintf(stderr, "toml cache: put %s (mtime=%ld size=%jd)\n", path, (long)st->st_mtime, (intmax_t)st->st_size);
 }
 
 static int cache_get(const char *path, const struct stat *st, TomlDoc *out)
@@ -47,9 +66,13 @@ static int cache_get(const char *path, const struct stat *st, TomlDoc *out)
 		    && toml_cache[i].size == st->st_size) {
 			/* cache hit */
 			*out = toml_cache[i].doc; /* struct copy */
+			toml_cache_hits++;
+			if (toml_cache_debug) fprintf(stderr, "toml cache: hit %s\n", path);
 			return 1;
 		}
 	}
+	toml_cache_misses++;
+	if (toml_cache_debug) fprintf(stderr, "toml cache: miss %s\n", path);
 	return 0;
 }
 
