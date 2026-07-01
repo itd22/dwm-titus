@@ -36,6 +36,8 @@ Quick recommendation
   - Option B — Allow the installer to use the network (easiest if you do not need strict offline): leave default network repos enabled. The dwm-titus Kickstart already enables Fedora and RPM Fusion metalinks.
 
 4) Software Selection (make these choices for a minimal dwm system)
+   try  fedora custom operation software +  windwow managers
+
 - Base environment: choose "Minimal Install" (this provides the smallest base system). Then add the X11 bits and minimal build/runtime packages.
 - Add the X/graphical groups or the following packages (group names and package availability depend on Fedora version):
   - Group: `@base-x` (or manually select the X packages below)
