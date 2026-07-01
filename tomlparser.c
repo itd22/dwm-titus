@@ -6,6 +6,52 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <sys/stat.h>
+
+/* Simple in-memory cache to avoid reparsing unchanged TOML files.
+ * Caches up to CACHE_SIZE recent parsed TomlDoc objects keyed by path,
+ * comparing file mtime and size to detect changes.
+ */
+#define TOML_CACHE_SIZE 8
+
+typedef struct {
+	char path[TOML_MAX_STR];
+	time_t mtime;
+	off_t  size;
+	TomlDoc doc;
+	int valid;
+} TomlCacheEntry;
+
+static TomlCacheEntry toml_cache[TOML_CACHE_SIZE];
+static int toml_cache_next = 0;
+
+static void cache_put(const char *path, const struct stat *st, const TomlDoc *doc)
+{
+	int i = toml_cache_next % TOML_CACHE_SIZE;
+	toml_cache_next++;
+	strncpy(toml_cache[i].path, path, TOML_MAX_STR - 1);
+	toml_cache[i].path[TOML_MAX_STR - 1] = '\0';
+	toml_cache[i].mtime = st->st_mtime;
+	toml_cache[i].size  = st->st_size;
+	toml_cache[i].doc = *doc; /* struct copy */
+	toml_cache[i].valid = 1;
+}
+
+static int cache_get(const char *path, const struct stat *st, TomlDoc *out)
+{
+	int i;
+	for (i = 0; i < TOML_CACHE_SIZE; i++) {
+		if (!toml_cache[i].valid) continue;
+		if (strcmp(toml_cache[i].path, path) == 0
+		    && toml_cache[i].mtime == st->st_mtime
+		    && toml_cache[i].size == st->st_size) {
+			/* cache hit */
+			*out = toml_cache[i].doc; /* struct copy */
+			return 1;
+		}
+	}
+	return 0;
+}
 
 static void
 copystr(char *dst, size_t dstsz, const char *src)
@@ -45,9 +91,6 @@ toml_table_count(const TomlDoc *doc, const char *section)
 }
 
 /* ── Inline string un-escaping ───────────────────────────────────────────── */
-/* Copies unescaped content from src (pointing just after opening '"') into
- * dst, stopping before the closing '"'.  Returns pointer to the closing '"'
- * (or end-of-string if unterminated). */
 static const char *
 unescape_into(const char *src, char *dst, int maxlen)
 {
@@ -72,10 +115,6 @@ unescape_into(const char *src, char *dst, int maxlen)
 }
 
 /* ── Inline table parser ─────────────────────────────────────────────────── */
-/* Parses key=value pairs from content between { and }.
- * p points to first character *after* the opening '{'.
- * Returns pointer to first character *after* the closing '}'.
- * Each pair is stored as a TomlEntry with the given section and tidx. */
 static const char *
 parse_inline_table(const char *p, TomlDoc *doc, const char *section, int tidx)
 {
@@ -126,7 +165,6 @@ parse_inline_table(const char *p, TomlDoc *doc, const char *section, int tidx)
 			if (*p == ']') p++;
 
 		} else {
-			/* integer or float */
 			char nbuf[64];
 			int ni = 0;
 			while (*p && *p != ',' && *p != '}' && !isspace((unsigned char)*p) && ni < 63)
@@ -152,9 +190,18 @@ parse_inline_table(const char *p, TomlDoc *doc, const char *section, int tidx)
 	return p;
 }
 
+/* Parse file (with caching): returns 1 on success, 0 on error */
 int
 toml_parse(const char *path, TomlDoc *doc)
 {
+	struct stat st;
+	if (stat(path, &st) != 0) return 0;
+
+	/* Check cache */
+	if (cache_get(path, &st, doc)) {
+		return 1; /* cache hit */
+	}
+
 	FILE *f = fopen(path, "r");
 	if (!f) return 0;
 	doc->n = 0;
@@ -190,7 +237,8 @@ toml_parse(const char *path, TomlDoc *doc)
 
 		/* [[array-of-tables]] */
 		if (p[0] == '[' && p[1] == '[') {
-			char *end = strstr(p + 2, "]]");
+			char *end = strstr(p + 2, "]] ");
+			if (!end) end = strstr(p + 2, "]]" );
 			if (!end) continue;
 			int len = (int)(end - (p + 2));
 			if (len >= TOML_MAX_STR) len = TOML_MAX_STR - 1;
@@ -314,6 +362,9 @@ toml_parse(const char *path, TomlDoc *doc)
 		doc->n++;
 	}
 	fclose(f);
+
+	/* Update cache with new parse result */
+	cache_put(path, &st, doc);
 	return 1;
 }
 
